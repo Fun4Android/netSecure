@@ -1,10 +1,14 @@
 package eu.l1am0.macchange.macchanger;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -22,6 +26,10 @@ import java.net.Inet6Address;
 import java.net.NetworkInterface;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static android.location.GpsStatus.GPS_EVENT_STARTED;
+import static android.location.GpsStatus.GPS_EVENT_STOPPED;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -31,70 +39,48 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         /*Get the Application Context*/
-        Context context = getApplicationContext();
+        final Context context = getApplicationContext();
+
+        systemHelpers.registerMacChangeRecievers(context);
+
+
 
         /*Get current Mac*/
-        if(canSU()){
-            setMacAdressToTextView(executeCommand("busybox ifconfig wlan0\n"));
+        if(!systemHelpers.canSU()){
+            setMacAdressToTextView("No Su");
+        }else {
+
+            if (!systemHelpers.hasBusyBox(context)) {
+                setMacAdressToTextView("No Bussy");
+            } else {
+                setMacAdressToTextView(systemHelpers.getMacAddress());
+            }
         }
+
+
 
         /*Button Listener*/
         final Button changeMac = (Button) findViewById(R.id.macChangeButton);
         changeMac.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View v) {
-                executeCommand("busybox ifconfig wlan0 hw ether 99:00:22:33:44:00");
-                setMacAdressToTextView(executeCommand("busybox ifconfig wlan0"));
+
+                systemHelpers.setRandomMacAddress(1);
+
+                WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                wifiManager.setWifiEnabled(false);
+                wifiManager.setWifiEnabled(true);
+
+                setMacAdressToTextView(systemHelpers.getMacAddress());
+
+
             }
         });
     }
 
-    public void setMacAdressToTextView(String macAdress){
+    private void setMacAdressToTextView(String macAdress){
         TextView macText = (TextView) findViewById(R.id.macText);
         macText.setText(macAdress);
     }
 
-    private String executeCommand(String command){
-        String line, returnString = null;
-        StringBuilder log = new StringBuilder();
-
-        try {
-            Process rootProcess = Runtime.getRuntime().exec(new String[]{"su","-c",command});
-
-
-            /*Get the read and write streams*/
-            BufferedReader osRes  = new BufferedReader(new InputStreamReader(rootProcess.getInputStream()));
-
-
-
-            if (null != osRes) {
-                // Grab the results
-                while ((line = osRes.readLine()) != null) {
-                    log.append(line);
-                }
-                //Close Streams
-                osRes.close();
-
-                returnString = log.toString();
-            }
-        } catch(Exception e){
-        }
-
-        return returnString;
-    }
-
-    private boolean canSU() {
-        Process process = null;
-        int exitValue = -1;
-        try {
-            process = Runtime.getRuntime().exec("su");
-            DataOutputStream toProcess = new DataOutputStream(process.getOutputStream());
-            toProcess.writeBytes("exec id\n");
-            toProcess.flush();
-            exitValue = process.waitFor();
-        } catch (Exception e) {
-            exitValue = -1;
-        }
-        return exitValue == 0;
-    }
 }
